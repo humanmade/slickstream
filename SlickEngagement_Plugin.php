@@ -654,6 +654,11 @@ JSBLOCK;
     //TODO: Clean this up / migrate to SR functions
     public function addSlickPageHeader()
     {
+        // @TODO: Confirm that this doesn't cause issues with Slickstream itself.
+        if (is_404()) {
+            return;
+        }
+
         global $post;
         echo "\n";
         $this->echoSlickstreamComment("Page Generated at: " . $this->getCurrentTimeStampByTimeZone('UTC') . " UTC");
