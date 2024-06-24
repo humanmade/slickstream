@@ -1,2 +1,2 @@
-# slickstream
-Performance improvements for Slickstream
+# Slickstream
+Performance improvements for Slickstream WordPress plugin.
