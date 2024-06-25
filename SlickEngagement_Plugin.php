@@ -549,10 +549,7 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
             if ( ! wp_next_scheduled( 'slickstream_fetch_boot_data', [ $siteCode, $transient_name, $transient_name_ttl ] ) ) {
                 $this->echoSlickstreamComment("Requesting page boot data via cron.");
                 wp_schedule_single_event( time(), 'slickstream_fetch_boot_data', [ $siteCode, $transient_name, $transient_name_ttl ] );
-                return;
             }
-
-            return;
         } else {
             $this->echoSlickstreamComment("Using cached page boot data: " . $transient_name);
         }
