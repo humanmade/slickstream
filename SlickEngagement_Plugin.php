@@ -104,7 +104,7 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
         add_action('init', array(&$this, 'add_taxonomies_to_pages'));
 
         // Register cron hook for processing.
-        add_action( 'slickstream_fetch_boot_data', array( &$this, 'process_fetch_boot_data' ), 10, 3 );
+        add_action( 'slickstream_fetch_boot_data', array( &$this, 'process_fetch_boot_data' ), 10, 4 );
 
         $prefix = is_network_admin() ? 'network_admin_' : '';
         $plugin_file = plugin_basename($this->getPluginDir() . DIRECTORY_SEPARATOR . $this->getMainPluginFileName()); //plugin_basename( $this->getMainPluginFileName() );
@@ -310,10 +310,8 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
 
     // Fetches the Page Boot Data from the server
     //TODO: if we find that `/page-boot-data` requests are reduced enough to always use origin, we can add headers to avoid hitting CloudFlare
-    private function fetchBootData( $siteCode )
+    private function fetchBootData( $siteCode, $page_url )
     {
-        $protocol = ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] != 'off') || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
-        $page_url = $protocol . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
         $remote = self::defaultServerUrl . '/d/page-boot-data?site=' . $siteCode . '&url=' . rawurlencode($page_url);
         $headers = array('referer' => home_url());
         $this->echoSlickstreamComment("Fetch endpoint: " . $remote);
@@ -414,15 +412,14 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
     }
 
     //Returns a name for the "page boot data" transient
-    private function getTransientName()
+    private function getTransientName( $page_url )
     {
-        defined( 'PAGE_BOOT_DATA_TRANSIENT_PREFIX' ) || DEFINE( 'PAGE_BOOT_DATA_TRANSIENT_PREFIX', 'slick_page_boot_' );
+        defined('PAGE_BOOT_DATA_TRANSIENT_PREFIX') || define('PAGE_BOOT_DATA_TRANSIENT_PREFIX', 'slick_page_boot_');
         // Use get_the_permalink() instead of $_SERVER['REQUEST_URI'] to avoid issues with:
         // query strings, hashed URLs, comment pagination etc. Creates less overhead due to being
         // called only on the "parent" page instead of every variation of the page.
         //$normalized_url = $_SERVER['HTTP_HOST'] . explode('?', $_SERVER['REQUEST_URI'])[0];
-        $normalized_url = get_the_permalink();
-        return PAGE_BOOT_DATA_TRANSIENT_PREFIX . md5($normalized_url);
+        return PAGE_BOOT_DATA_TRANSIENT_PREFIX . md5( $page_url );
     }
 
     private function isDebugModeEnabled()
@@ -522,15 +519,18 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
             return;
         }
 
-        global $wp;
+        $page_url = get_the_permalink();
+        if ( ! $page_url ) {
+            return;
+        }
 
-        $transient_name = $this->getTransientName(); // Name for WP Transient Cache API Key
+        $transient_name = $this->getTransientName( $page_url ); // Name for WP Transient Cache API Key
         $transient_name_ttl = $transient_name . '_ttl'; // Name for WP Transient Cache TTL Key
 
         // If `delete-boot=1` is passed as a query param, delete the stored page boot data
         $this->handleDeleteBootData();
 
-        $no_transient_data = false === ($boot_data_obj = get_transient($transient_name)); //get_transient returns `false` if the key doesn't exist
+        $no_transient_data = false === ( $boot_data_obj = get_transient( $transient_name ) ); //get_transient returns `false` if the key doesn't exist
         $is_expired = get_transient( $transient_name_ttl ) < time();
 
         // If `slick-boot=1` is passed as a query param, force a re-fetch of the boot data from the server
@@ -546,9 +546,9 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
         }
 
         if ( ( $force_fetch_boot_data || $no_transient_data || $is_expired ) ) {
-            if ( ! wp_next_scheduled( 'slickstream_fetch_boot_data', [ $siteCode, $transient_name, $transient_name_ttl ] ) ) {
+            if ( ! wp_next_scheduled( 'slickstream_fetch_boot_data', [ $siteCode, $page_url, $transient_name, $transient_name_ttl ] ) ) {
                 $this->echoSlickstreamComment( 'Requesting page boot data via cron.' );
-                wp_schedule_single_event( time(), 'slickstream_fetch_boot_data', [ $siteCode, $transient_name, $transient_name_ttl ] );
+                wp_schedule_single_event( time(), 'slickstream_fetch_boot_data', [ $siteCode, $page_url, $transient_name, $transient_name_ttl ] );
             }
         } else {
             $this->echoSlickstreamComment("Using cached page boot data: " . $transient_name);
@@ -922,12 +922,13 @@ JSBLOCK;
      * Process the fetch boot data request.
      *
      * @param string $siteCode The site code.
+     * @param string $page_url Current Page URL.
      * @param string $transient_name The transient name.
      * @param string $transient_name_ttl The transient name for the TTL.
      *
      * @return void
      */
-    public function process_fetch_boot_data( string $siteCode, string $transient_name, string $transient_name_ttl ): void {
+    public function process_fetch_boot_data( string $siteCode, string $page_url, string $transient_name, string $transient_name_ttl ): void {
         // Slickstream locally will always return a 403 error. To combat this, set a transient with an empty object.
         if ( wp_get_environment_type() === 'local' ) {
             set_transient( $transient_name, wp_json_encode( new stdClass ), 0 );
@@ -935,7 +936,7 @@ JSBLOCK;
             return;
         }
 
-        $boot_data_obj = $this->fetchBootData( $siteCode );  // Most time consuming. So bypassed with stale while revalidate.
+        $boot_data_obj = $this->fetchBootData( $siteCode, $page_url );  // Most time consuming. So bypassed with stale while revalidate.
         if ( ! $boot_data_obj ) {
             // If the boot data is not fetched, reset the ttl to 15 minutes to retry fetching the boot data.
             set_transient( $transient_name_ttl, time() + ( 15 * MINUTE_IN_SECONDS ), 0);
