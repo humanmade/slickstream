@@ -104,7 +104,7 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
         add_action('init', array(&$this, 'add_taxonomies_to_pages'));
 
         // Register cron hook for processing.
-        add_filter( 'slickstream_fetch_boot_data', array( &$this, 'process_fetch_boot_data' ), 10, 3 );
+        add_action( 'slickstream_fetch_boot_data', array( &$this, 'process_fetch_boot_data' ), 10, 3 );
 
         $prefix = is_network_admin() ? 'network_admin_' : '';
         $plugin_file = plugin_basename($this->getPluginDir() . DIRECTORY_SEPARATOR . $this->getMainPluginFileName()); //plugin_basename( $this->getMainPluginFileName() );
@@ -525,7 +525,7 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
         global $wp;
 
         $transient_name = $this->getTransientName(); // Name for WP Transient Cache API Key
-        $transient_name_ttl = $this->getTransientName() . '_ttl'; // Name for WP Transient Cache TTL Key
+        $transient_name_ttl = $transient_name . '_ttl'; // Name for WP Transient Cache TTL Key
 
         // If `delete-boot=1` is passed as a query param, delete the stored page boot data
         $this->handleDeleteBootData();
