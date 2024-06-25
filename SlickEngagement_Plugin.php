@@ -531,7 +531,7 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
         $this->handleDeleteBootData();
 
         $no_transient_data = false === ($boot_data_obj = get_transient($transient_name)); //get_transient returns `false` if the key doesn't exist
-        $is_expired = get_transient($transient_name_ttl) < time();
+        $is_expired = get_transient( $transient_name_ttl ) < time();
 
         // If `slick-boot=1` is passed as a query param, force a re-fetch of the boot data from the server
         // If `slick-boot=0` is passed as a query param, skip fetching boot data from the server
@@ -540,14 +540,14 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
         $dont_load_boot_data = ($slick_boot_param === '0');
         $slick_boot_param_not_set = ($slick_boot_param === null);
 
-        if ($dont_load_boot_data) {
+        if ( $dont_load_boot_data ) {
             $this->echoSlickstreamComment("Skipping page boot data and CLS output");
             return;
         }
 
         if ( ( $force_fetch_boot_data || $no_transient_data || $is_expired ) ) {
             if ( ! wp_next_scheduled( 'slickstream_fetch_boot_data', [ $siteCode, $transient_name, $transient_name_ttl ] ) ) {
-                $this->echoSlickstreamComment("Requesting page boot data via cron.");
+                $this->echoSlickstreamComment( 'Requesting page boot data via cron.' );
                 wp_schedule_single_event( time(), 'slickstream_fetch_boot_data', [ $siteCode, $transient_name, $transient_name_ttl ] );
             }
         } else {
@@ -943,6 +943,6 @@ JSBLOCK;
         }
 
         set_transient( $transient_name, $boot_data_obj, 0 ); // Set with no expiration, the cache will be invalidated by the TTL through cron.
-        set_transient( $transient_name_ttl, time() + ( 15 * MINUTE_IN_SECONDS), 0 );
+        set_transient( $transient_name_ttl, time() + ( 15 * MINUTE_IN_SECONDS ), 0 );
     }
 }
