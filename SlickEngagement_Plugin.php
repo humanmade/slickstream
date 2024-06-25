@@ -318,7 +318,7 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
         $headers = array('referer' => home_url());
         $this->echoSlickstreamComment("Fetch endpoint: " . $remote);
         $this->echoSlickstreamComment("Headers: " . json_encode($headers));
-        $response = wp_remote_get($remote , array('timeout' => 2, 'headers' => $headers));
+        $response = wp_remote_get($remote, array('timeout' => 2, 'headers' => $headers));
         $response_code = wp_remote_retrieve_response_code( $response );
         $response_text = wp_remote_retrieve_body($response);
 
@@ -545,12 +545,14 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
             return;
         }
 
-        if ( ( $force_fetch_boot_data || $no_transient_data || $is_expired || $slick_boot_param_not_set ) ) {
+        if ( ( $force_fetch_boot_data || $no_transient_data || $is_expired ) ) {
             if ( ! wp_next_scheduled( 'slickstream_fetch_boot_data', [ $siteCode, $transient_name, $transient_name_ttl ] ) ) {
                 $this->echoSlickstreamComment("Requesting page boot data via cron.");
                 wp_schedule_single_event( time(), 'slickstream_fetch_boot_data', [ $siteCode, $transient_name, $transient_name_ttl ] );
                 return;
             }
+
+            return;
         } else {
             $this->echoSlickstreamComment("Using cached page boot data: " . $transient_name);
         }
@@ -936,7 +938,7 @@ JSBLOCK;
             return;
         }
 
-        $boot_data_obj = $this->fetchBootData($siteCode);  // Most time consuming. So bypassed with stale while revalidate.
+        $boot_data_obj = $this->fetchBootData( $siteCode );  // Most time consuming. So bypassed with stale while revalidate.
         if ( ! $boot_data_obj ) {
             // If the boot data is not fetched, reset the ttl to 15 minutes to retry fetching the boot data.
             set_transient( $transient_name_ttl, time() + ( 15 * MINUTE_IN_SECONDS ), 0);
@@ -944,6 +946,6 @@ JSBLOCK;
         }
 
         set_transient( $transient_name, $boot_data_obj, 0 ); // Set with no expiration, the cache will be invalidated by the TTL through cron.
-        set_transient( $transient_name_ttl, time() + ( 15 * MINUTE_IN_SECONDS) , 0 );
+        set_transient( $transient_name_ttl, time() + ( 15 * MINUTE_IN_SECONDS), 0 );
     }
 }
