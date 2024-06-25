@@ -325,7 +325,7 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
         if ($response_code === 200) {
             return json_decode($response_text);
         } else {
-            $this->echoSlickstreamComment("Error fetching boot data: " . $response_text);
+            error_log( "Error fetching boot data: " . print_r( $response_text, true ) );
             return null;
         }
     }
