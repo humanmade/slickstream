@@ -45,7 +45,7 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
             }
         }
     }
-    
+
     protected function initOptions()
     {
         $options = $this->getOptionMetaData();
@@ -102,6 +102,9 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
         // Register AJAX hooks
         // Ensure pages can be configured with categories and tags
         add_action('init', array(&$this, 'add_taxonomies_to_pages'));
+
+        // Register cron hook for processing.
+        add_filter( 'slickstream_fetch_boot_data', array( &$this, 'process_fetch_boot_data' ), 10, 3 );
 
         $prefix = is_network_admin() ? 'network_admin_' : '';
         $plugin_file = plugin_basename($this->getPluginDir() . DIRECTORY_SEPARATOR . $this->getMainPluginFileName()); //plugin_basename( $this->getMainPluginFileName() );
@@ -307,7 +310,7 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
 
     // Fetches the Page Boot Data from the server
     //TODO: if we find that `/page-boot-data` requests are reduced enough to always use origin, we can add headers to avoid hitting CloudFlare
-    private function fetchBootData($siteCode) 
+    private function fetchBootData( $siteCode )
     {
         $protocol = ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] != 'off') || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
         $page_url = $protocol . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
@@ -318,7 +321,7 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
         $response = wp_remote_get($remote , array('timeout' => 2, 'headers' => $headers));
         $response_code = wp_remote_retrieve_response_code( $response );
         $response_text = wp_remote_retrieve_body($response);
-        
+
         if ($response_code === 200) {
             return json_decode($response_text);
         } else {
@@ -410,11 +413,15 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
         }
     }
 
-    //Returns a name for the "page boot data" transient 
+    //Returns a name for the "page boot data" transient
     private function getTransientName()
     {
-        DEFINE('PAGE_BOOT_DATA_TRANSIENT_PREFIX', 'slick_page_boot_');
-        $normalized_url = $_SERVER['HTTP_HOST'] . explode('?', $_SERVER['REQUEST_URI'])[0];
+        defined( 'PAGE_BOOT_DATA_TRANSIENT_PREFIX' ) || DEFINE( 'PAGE_BOOT_DATA_TRANSIENT_PREFIX', 'slick_page_boot_' );
+        // Use get_the_permalink() instead of $_SERVER['REQUEST_URI'] to avoid issues with:
+        // query strings, hashed URLs, comment pagination etc. Creates less overhead due to being
+        // called only on the "parent" page instead of every variation of the page.
+        //$normalized_url = $_SERVER['HTTP_HOST'] . explode('?', $_SERVER['REQUEST_URI'])[0];
+        $normalized_url = get_the_permalink();
         return PAGE_BOOT_DATA_TRANSIENT_PREFIX . md5($normalized_url);
     }
 
@@ -468,7 +475,7 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
 
     private function echoConsoleOutput()
     {
-        if ($this->consoleOutput !== "") 
+        if ($this->consoleOutput !== "")
         {
             echo "<script class='$this->scriptClass'>console.info(`[slickstream]\n$this->consoleOutput`)</script>\n";
         }
@@ -494,7 +501,7 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
         }
 
         $this->echoSlickstreamComment("Deleting page boot data from cache");
-        $comment = (false === delete_transient($this->getTransientName())) ? 
+        $comment = (false === delete_transient($this->getTransientName())) ?
             "Nothing to do--page not found in cache" :
             "Page boot data deleted successfully";
         $this->echoSlickstreamComment($comment);
@@ -506,7 +513,7 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
         return $param_val;
     }
 
-    private function echoPageBootData() 
+    private function echoPageBootData()
     {
         $siteCode = substr(trim($this->getOption('SiteCode')), 0, 9);
 
@@ -516,13 +523,15 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
         }
 
         global $wp;
-        
-        $transient_name = $this->getTransientName(); //Name for WP Transient Cache API Key
+
+        $transient_name = $this->getTransientName(); // Name for WP Transient Cache API Key
+        $transient_name_ttl = $this->getTransientName() . '_ttl'; // Name for WP Transient Cache TTL Key
 
         // If `delete-boot=1` is passed as a query param, delete the stored page boot data
         $this->handleDeleteBootData();
 
         $no_transient_data = false === ($boot_data_obj = get_transient($transient_name)); //get_transient returns `false` if the key doesn't exist
+        $is_expired = get_transient($transient_name_ttl) < time();
 
         // If `slick-boot=1` is passed as a query param, force a re-fetch of the boot data from the server
         // If `slick-boot=0` is passed as a query param, skip fetching boot data from the server
@@ -530,23 +539,18 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
         $force_fetch_boot_data = ($slick_boot_param === '1');
         $dont_load_boot_data = ($slick_boot_param === '0');
         $slick_boot_param_not_set = ($slick_boot_param === null);
-    
-        // Check for existing data in transient cache. If none, then fetch data from server.
-        //TODO: store cache hits and cache misses in a transient or option?
-        if ($force_fetch_boot_data || ($no_transient_data && $slick_boot_param_not_set)) {
-            $this->echoSlickstreamComment("Fetching page boot data from server");
-            $boot_data_obj = $this->fetchBootData($siteCode);
 
-            // Put the results in transient storage; expire after 15 minutes
-            if ($boot_data_obj) {
-                set_transient($transient_name, $boot_data_obj, 15 * MINUTE_IN_SECONDS);
-                $this->echoSlickstreamComment("Storing page boot data in transient cache: " . $transient_name);
-            } else {
-                return;
-            }
-        } else if ($dont_load_boot_data) {
+        if ($dont_load_boot_data) {
             $this->echoSlickstreamComment("Skipping page boot data and CLS output");
             return;
+        }
+
+        if ( ( $force_fetch_boot_data || $no_transient_data || $is_expired || $slick_boot_param_not_set ) ) {
+            if ( ! wp_next_scheduled( 'slickstream_fetch_boot_data', [ $siteCode, $transient_name, $transient_name_ttl ] ) ) {
+                $this->echoSlickstreamComment("Requesting page boot data via cron.");
+                wp_schedule_single_event( time(), 'slickstream_fetch_boot_data', [ $siteCode, $transient_name, $transient_name_ttl ] );
+                return;
+            }
         } else {
             $this->echoSlickstreamComment("Using cached page boot data: " . $transient_name);
         }
@@ -558,13 +562,13 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
     //Plugin-based A/B Testing JS Logic
     private function getAbTestJs()
     {
-        
+
         $jsBlock = <<<JSBLOCK
         window.slickAbTestResult = function(percentEnabled, recalculate = false, testName = 'embed') {
         const win = window;
         const storage = win.localStorage;
         const targetPercentEnabled = parseInt(percentEnabled);
-        
+
         if (isNaN(targetPercentEnabled)) {
             return new Error("Invalid enabled percentage");
         }
@@ -572,10 +576,10 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
         let enableSlickFeature;
         const abTestStorageKey = `slickab-\${testName}-\${targetPercentEnabled}`;
         const storedOnOffVal = storage.getItem(abTestStorageKey);
-        
+
         const percentKey = `slickAbTestPercent-\${testName}`;
         const storedPercentVal = parseInt(storage.getItem(percentKey));
-        
+
         if (recalculate === true || !storedOnOffVal || storedPercentVal !== targetPercentEnabled) {
             enableSlickFeature = (Math.random() * 100) <= targetPercentEnabled;
             storage.setItem(abTestStorageKey, enableSlickFeature);
@@ -593,18 +597,18 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
         return enableSlickFeature;
         };
         JSBLOCK;
-        
+
         return $jsBlock;
     }
 
     private function get_tax_terms($post, $taxonomy_name) {
         $taxTerms = array();
         $terms = get_the_terms($post, $taxonomy_name);
-    
+
         if (empty($terms)) {
             return $taxTerms;
         }
-    
+
         foreach ($terms as $term) {
             $termObject = (object) [
                 '@id' => $term->term_id,
@@ -613,10 +617,10 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
             ];
             array_push($taxTerms, $termObject);
         }
-    
+
         return $taxTerms;
     }
-    
+
     private function create_ldJsonTaxElement($taxonomy, $taxTerms) {
         return (object) [
             'name' => $taxonomy->name,
@@ -696,7 +700,7 @@ JSBLOCK;
         }
 
         $this->echoSlickstreamComment("Page Metadata:", false);
-        
+
         //TODO: Move this out into SR functions and cache the output
         $ldJsonElements = array();
 
@@ -704,7 +708,7 @@ JSBLOCK;
             '@type' => 'Plugin',
             'version' => PLUGIN_VERSION,
         ];
-        
+
         array_push($ldJsonElements, $ldJsonPlugin);
 
         $ldJsonSite = (object) [
@@ -848,7 +852,7 @@ JSBLOCK;
                     foreach ($taxonomies as $taxonomy) {
                         if (empty($taxonomy->_builtin) && $taxonomy->public) {
                             $taxTerms = $this->get_tax_terms($post, $taxonomy->name);
-                    
+
                             if (!empty($taxTerms)) {
                                 $ldJsonTaxElement = $this->create_ldJsonTaxElement($taxonomy, $taxTerms);
                                 array_push($ldJsonTaxonomies, $ldJsonTaxElement);
@@ -905,13 +909,41 @@ JSBLOCK;
         ];
         echo '<script type="application/x-slickstream+json">' . json_encode($ldJson, JSON_UNESCAPED_SLASHES) . "</script>\n";
         $this->echoSlickstreamComment("END Page Metadata", false);
-        
-        if ($this->isDebugModeEnabled()) 
+
+        if ($this->isDebugModeEnabled())
         {
             $this->consoleLogAbTestData();
             $this->debugCLS();
             $this->echoConsoleOutput();
         }
         $this->echoWpRocketDetection();
+    }
+
+    /**
+     * Process the fetch boot data request.
+     *
+     * @param string $siteCode The site code.
+     * @param string $transient_name The transient name.
+     * @param string $transient_name_ttl The transient name for the TTL.
+     *
+     * @return void
+     */
+    public function process_fetch_boot_data( string $siteCode, string $transient_name, string $transient_name_ttl ): void {
+        // Slickstream locally will always return a 403 error. To combat this, set a transient with an empty object.
+        if ( wp_get_environment_type() === 'local' ) {
+            set_transient( $transient_name, wp_json_encode( new stdClass ), 0 );
+            set_transient( $transient_name_ttl, time() + ( 15 * MINUTE_IN_SECONDS ), 0);
+            return;
+        }
+
+        $boot_data_obj = $this->fetchBootData($siteCode);  // Most time consuming. So bypassed with stale while revalidate.
+        if ( ! $boot_data_obj ) {
+            // If the boot data is not fetched, reset the ttl to 15 minutes to retry fetching the boot data.
+            set_transient( $transient_name_ttl, time() + ( 15 * MINUTE_IN_SECONDS ), 0);
+            return;
+        }
+
+        set_transient( $transient_name, $boot_data_obj, 0 ); // Set with no expiration, the cache will be invalidated by the TTL through cron.
+        set_transient( $transient_name_ttl, time() + ( 15 * MINUTE_IN_SECONDS) , 0 );
     }
 }
