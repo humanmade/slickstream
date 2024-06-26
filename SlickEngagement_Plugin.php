@@ -321,9 +321,10 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
         $response_text = wp_remote_retrieve_body($response);
 
         if ($response_code === 200) {
+            $this->echoSlickstreamComment( "Fetch successful." );
             return json_decode($response_text);
         } else {
-            error_log( "Error fetching boot data: " . print_r( $response_text, true ) );
+            $this->echoSlickstreamComment( "Error fetching boot data: " . $response_text );
             return null;
         }
     }
@@ -332,7 +333,7 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
         $boot_data_json = json_encode($boot_data_obj);
 
         if (false === $boot_data_json) {
-            $this->echoSlickstreamComment('Error encoding page boot data JSON');
+            $this->echoSlickstreamComment('Error encoding page boot data JSON', true);
             return;
         }
 
@@ -414,7 +415,7 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
     //Returns a name for the "page boot data" transient
     private function getTransientName( $page_url )
     {
-        defined('PAGE_BOOT_DATA_TRANSIENT_PREFIX') || define('PAGE_BOOT_DATA_TRANSIENT_PREFIX', 'slick_page_boot_');
+        defined( 'PAGE_BOOT_DATA_TRANSIENT_PREFIX' ) || define( 'PAGE_BOOT_DATA_TRANSIENT_PREFIX', 'slick_page_boot_' );
         // Use get_the_permalink() instead of $_SERVER['REQUEST_URI'] to avoid issues with:
         // query strings, hashed URLs, comment pagination etc. Creates less overhead due to being
         // called only on the "parent" page instead of every variation of the page.
@@ -428,7 +429,7 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
         return $debugModeParam === "1";
     }
 
-    private function echoSlickstreamComment($comment, $echoToConsole = true)
+    private function echoSlickstreamComment($comment, $echoToConsole = false)
     {
         echo "<!-- [slickstream] " . $comment . " -->\n";
 
