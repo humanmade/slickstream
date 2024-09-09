@@ -520,6 +520,16 @@ class SlickEngagement_Plugin extends SlickEngagement_LifeCycle
             return;
         }
 
+        $page_id = get_the_ID();
+        $page = get_post( $page_id );
+        if ( ! $page ) {
+            return;
+        }
+
+        if ( in_array( $page->post_type, apply_filters( 'slickstream_exclude_post_types', [] ), true ) ) {
+            return;
+        }
+
         $page_url = get_the_permalink();
         if ( ! $page_url ) {
             return;
