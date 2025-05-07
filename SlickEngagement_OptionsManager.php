@@ -1,11 +1,13 @@
-<?php
+<?php 
+declare(strict_types=1);
+namespace Slickstream;
 
-class SlickEngagement_OptionsManager
-{
+class OptionsManager {
+    private $optionNamePrefix;
 
-    public function getOptionNamePrefix()
-    {
-        return get_class($this) . '_';
+    public function __construct() {
+        // Note: Do not change this or else settings from previous versions will not be able to be accessed
+        $this->optionNamePrefix = 'SlickEngagement_Plugin_';
     }
 
     /**
@@ -24,16 +26,14 @@ class SlickEngagement_OptionsManager
      *       'CanDoOperationX' => array('Can do Operation X', 'Administrator', 'Editor', 'Author', 'Contributor', 'Subscriber'),
      *       'Rating:', 'Excellent', 'Good', 'Fair', 'Poor')
      */
-    public function getOptionMetaData()
-    {
-        return array();
+    public function getOptionMetaData(): array {
+        return [];
     }
 
     /**
      * @return array of string name of options
      */
-    public function getOptionNames()
-    {
+    public function getOptionNames(): array {
         return array_keys($this->getOptionMetaData());
     }
 
@@ -41,20 +41,17 @@ class SlickEngagement_OptionsManager
      * Override this method to initialize options to default values and save to the database with add_option
      * @return void
      */
-    protected function initOptions()
-    {
-    }
+    protected function initOptions(): void {}
 
     /**
      * Cleanup: remove all options from the DB
      * @return void
      */
-    protected function deleteSavedOptions()
-    {
+    protected function deleteSavedOptions(): void  {
         $optionMetaData = $this->getOptionMetaData();
         if (is_array($optionMetaData)) {
             foreach ($optionMetaData as $aOptionKey => $aOptionMeta) {
-                $prefixedOptionName = $this->prefix($aOptionKey); // how it is stored in DB
+                $prefixedOptionName = $this->prefix($aOptionKey);
                 delete_option($prefixedOptionName);
             }
         }
@@ -64,39 +61,21 @@ class SlickEngagement_OptionsManager
      * @return string display name of the plugin to show as a name/title in HTML.
      * Just returns the class name. Override this method to return something more readable
      */
-    public function getPluginDisplayName()
-    {
-        return get_class($this);
+    public function getPluginDisplayName(): string {
+        return 'Slickstream Engagement';
     }
-
+    
     /**
      * Get the prefixed version input $name suitable for storing in WP options
      * Idempotent: if $optionName is already prefixed, it is not prefixed again, it is returned without change
      * @param  $name string option name to prefix. Defined in settings.php and set as keys of $this->optionMetaData
      * @return string
      */
-    public function prefix($name)
-    {
-        $optionNamePrefix = $this->getOptionNamePrefix();
-        if (strpos($name, $optionNamePrefix) === 0) { // 0 but not false
+    public function prefix($name): string {
+        if (strpos($name, $this->optionNamePrefix) === 0) { // 0 but not false
             return $name; // already prefixed
         }
-        return $optionNamePrefix . $name;
-    }
-
-    /**
-     * Remove the prefix from the input $name.
-     * Idempotent: If no prefix found, just returns what was input.
-     * @param  $name string
-     * @return string $optionName without the prefix.
-     */
-    public function &unPrefix($name)
-    {
-        $optionNamePrefix = $this->getOptionNamePrefix();
-        if (strpos($name, $optionNamePrefix) === 0) {
-            return substr($name, strlen($optionNamePrefix));
-        }
-        return $name;
+        return $this->optionNamePrefix . $name;
     }
 
     /**
@@ -107,14 +86,13 @@ class SlickEngagement_OptionsManager
      * @return string the value from delegated call to get_option(), or optional default value
      * if option is not set.
      */
-    public function getOption($optionName, $default = null)
-    {
-        $prefixedOptionName = $this->prefix($optionName); // how it is stored in DB
+    public function getOption($optionName, $default = null): string {
+        $prefixedOptionName = $this->prefix($optionName);
         $retVal = get_option($prefixedOptionName);
         if (!$retVal && $default) {
             $retVal = $default;
         }
-        return $retVal;
+        return (string) $retVal;
     }
 
     /**
@@ -123,9 +101,8 @@ class SlickEngagement_OptionsManager
      * @param  $optionName string defined in settings.php and set as keys of $this->optionMetaData
      * @return bool from delegated call to delete_option()
      */
-    public function deleteOption($optionName)
-    {
-        $prefixedOptionName = $this->prefix($optionName); // how it is stored in DB
+    public function deleteOption($optionName): bool {
+        $prefixedOptionName = $this->prefix($optionName);
         return delete_option($prefixedOptionName);
     }
 
@@ -136,9 +113,8 @@ class SlickEngagement_OptionsManager
      * @param  $value mixed the new value
      * @return null from delegated call to delete_option()
      */
-    public function addOption($optionName, $value)
-    {
-        $prefixedOptionName = $this->prefix($optionName); // how it is stored in DB
+    public function addOption($optionName, $value): bool {
+        $prefixedOptionName = $this->prefix($optionName);
         return add_option($prefixedOptionName, $value);
     }
 
@@ -149,9 +125,8 @@ class SlickEngagement_OptionsManager
      * @param  $value mixed the new value
      * @return null from delegated call to delete_option()
      */
-    public function updateOption($optionName, $value)
-    {
-        $prefixedOptionName = $this->prefix($optionName); // how it is stored in DB
+    public function updateOption($optionName, $value): bool {
+        $prefixedOptionName = $this->prefix($optionName);
         return update_option($prefixedOptionName, $value);
     }
 
@@ -165,8 +140,7 @@ class SlickEngagement_OptionsManager
      * @param  $optionName
      * @return string role name
      */
-    public function getRoleOption($optionName)
-    {
+    public function getRoleOption($optionName): string {
         $roleAllowed = $this->getOption($optionName);
         if (!$roleAllowed || $roleAllowed == '') {
             $roleAllowed = 'Administrator';
@@ -180,8 +154,7 @@ class SlickEngagement_OptionsManager
      * @param  $roleName
      * @return string a WP capability or '' if unknown input role
      */
-    protected function roleToCapability($roleName)
-    {
+    protected function roleToCapability($roleName): string {
         switch ($roleName) {
             case 'Super Admin':
                 return 'manage_options';
@@ -205,8 +178,7 @@ class SlickEngagement_OptionsManager
      * @param $roleName string a standard WP role name like 'Administrator'
      * @return bool
      */
-    public function isUserRoleEqualOrBetterThan($roleName)
-    {
+    public function isUserRoleEqualOrBetterThan($roleName): bool {
         if ('Anyone' == $roleName) {
             return true;
         }
@@ -218,8 +190,7 @@ class SlickEngagement_OptionsManager
      * @param  $optionName string name of a Role option (see comments in getRoleOption())
      * @return bool indicates if the user has adequate permissions
      */
-    public function canUserDoRoleOption($optionName)
-    {
+    public function canUserDoRoleOption($optionName): bool {
         $roleAllowed = $this->getRoleOption($optionName);
         if ('Anyone' == $roleAllowed) {
             return true;
@@ -228,40 +199,11 @@ class SlickEngagement_OptionsManager
     }
 
     /**
-     * see: http://codex.wordpress.org/Creating_Options_Pages
-     * @return void
-     */
-    public function createSettingsMenu()
-    {
-        $pluginName = $this->getPluginDisplayName();
-        //create new top-level menu
-        add_menu_page($pluginName . ' Plugin Settings',
-            $pluginName,
-            'administrator',
-            get_class($this),
-            array(&$this, 'settingsPage')
-            /*,plugins_url('/images/icon.png', __FILE__)*/); // if you call 'plugins_url; be sure to "require_once" it
-
-        //call register settings function
-        add_action('admin_init', array(&$this, 'registerSettings'));
-    }
-
-    public function registerSettings()
-    {
-        $settingsGroup = get_class($this) . '-settings-group';
-        $optionMetaData = $this->getOptionMetaData();
-        foreach ($optionMetaData as $aOptionKey => $aOptionMeta) {
-            register_setting($settingsGroup, $aOptionMeta);
-        }
-    }
-
-    /**
      * Creates HTML for the Administration page to set options for this plugin.
      * Override this method to create a customized page.
      * @return void
      */
-    public function settingsPage()
-    {
+    public function settingsPage(): void {
         if (!current_user_can('manage_options')) {
             wp_die(__('You do not have sufficient permissions to access this page.', 'slick-engagement'));
         }
@@ -312,7 +254,7 @@ if ($optionMetaData != null) {
                             </tr>
                         <?php
 }
-        }
+        } //if ($optionMetaData != null) {
         ?>
                 </tbody></table>
                 <p class="submit">
@@ -335,8 +277,7 @@ if ($optionMetaData != null) {
      * @param  $savedOptionValue string current value for $aOptionKey
      * @return void
      */
-    protected function createFormControl($aOptionKey, $aOptionMeta, $savedOptionValue)
-    {
+    protected function createFormControl($aOptionKey, $aOptionMeta, $savedOptionValue): void {
         if (is_array($aOptionMeta) && count($aOptionMeta) > 2) { // Drop-down list
             $choices = array_slice($aOptionMeta, 1);
             ?>
@@ -375,8 +316,7 @@ foreach ($choices as $aChoice) {
      * @param  $optionValue string
      * @return string __($optionValue) if it is listed in this method, otherwise just returns $optionValue
      */
-    protected function getOptionValueI18nString($optionValue)
-    {
+    protected function getOptionValueI18nString($optionValue): string {
         switch ($optionValue) {
             case 'true':
                 return __('true', 'slick-engagement');
@@ -397,37 +337,5 @@ foreach ($choices as $aChoice) {
                 return __('Anyone', 'slick-engagement');
         }
         return $optionValue;
-    }
-
-    /**
-     * Query MySQL DB for its version
-     * @return string|false
-     */
-    protected function getMySqlVersion()
-    {
-        global $wpdb;
-        $rows = $wpdb->get_results('select version() as mysqlversion');
-        if (!empty($rows)) {
-            return $rows[0]->mysqlversion;
-        }
-        return false;
-    }
-
-    /**
-     * If you want to generate an email address like "no-reply@your-site.com" then
-     * you can use this to get the domain name part.
-     * E.g.  'no-reply@' . $this->getEmailDomain();
-     * This code was stolen from the wp_mail function, where it generates a default
-     * from "wordpress@your-site.com"
-     * @return string domain name
-     */
-    public function getEmailDomain()
-    {
-        // Get the site domain and get rid of www.
-        $sitename = strtolower($_SERVER['SERVER_NAME']);
-        if (substr($sitename, 0, 4) == 'www.') {
-            $sitename = substr($sitename, 4);
-        }
-        return $sitename;
     }
 }

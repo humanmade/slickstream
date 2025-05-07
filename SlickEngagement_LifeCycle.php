@@ -1,11 +1,16 @@
-<?php
-include_once 'SlickEngagement_InstallIndicator.php';
+<?php 
+declare(strict_types=1);
+namespace Slickstream;
 
-class SlickEngagement_LifeCycle extends SlickEngagement_InstallIndicator
-{
+require_once 'SlickEngagement_InstallIndicator.php';
 
-    public function install()
-    {
+class PluginLifecycle extends InstallIndicator {
+
+    public function __construct() {
+        parent::__construct();
+    }
+
+    public function install(): void {
 
         // Initialize Plugin Options
         $this->initOptions();
@@ -23,8 +28,7 @@ class SlickEngagement_LifeCycle extends SlickEngagement_InstallIndicator
         $this->markAsInstalled();
     }
 
-    public function uninstall()
-    {
+    public function uninstall(): void {
         $this->otherUninstall();
         $this->unInstallDatabaseTables();
         $this->deleteSavedOptions();
@@ -35,128 +39,60 @@ class SlickEngagement_LifeCycle extends SlickEngagement_InstallIndicator
      * Perform any version-upgrade activities prior to activation (e.g. database changes)
      * @return void
      */
-    public function upgrade()
-    {
+    public function upgrade(): void {}
+
+    /**
+     * @return void
+     */
+    public function activate(): void {
+        $this->slickLog("Activating");
     }
 
     /**
-     * See: http://plugin.michael-simpson.com/?page_id=105
      * @return void
      */
-    public function activate()
-    {
-        $this->guildLog("Activating");
-    }
-
-    /**
-     * See: http://plugin.michael-simpson.com/?page_id=105
-     * @return void
-     */
-    public function deactivate()
-    {
-        $this->guildLog("Deactivating");
+    public function deactivate(): void {
+        $this->slickLog("Deactivating");
         // $this->uninstall();
     }
 
     /**
-     * See: http://plugin.michael-simpson.com/?page_id=31
      * @return void
      */
-    protected function initOptions()
-    {
-    }
+    protected function initOptions(): void {}
 
-    public function addActionsAndFilters()
-    {
-    }
+    public function addActionsAndFilters(): void {}
 
     /**
-     * See: http://plugin.michael-simpson.com/?page_id=101
      * Called by install() to create any database tables if needed.
      * Best Practice:
      * (1) Prefix all table names with $wpdb->prefix
      * (2) make table names lower case only
      * @return void
      */
-    protected function installDatabaseTables()
-    {
-    }
+    protected function installDatabaseTables(): void {}
 
     /**
-     * See: http://plugin.michael-simpson.com/?page_id=101
      * Drop plugin-created tables on uninstall.
      * @return void
      */
-    protected function unInstallDatabaseTables()
-    {
-    }
+    protected function unInstallDatabaseTables(): void {}
 
     /**
      * Override to add any additional actions to be done at install time
-     * See: http://plugin.michael-simpson.com/?page_id=33
      * @return void
      */
-    protected function otherInstall()
-    {
-    }
+    protected function otherInstall(): void {}
 
     /**
      * Override to add any additional actions to be done at uninstall time
-     * See: http://plugin.michael-simpson.com/?page_id=33
      * @return void
      */
-    protected function otherUninstall()
-    {
-    }
+    protected function otherUninstall(): void {}
 
-    /**
-     * Puts the configuration page in the Plugins menu by default.
-     * Override to put it elsewhere or create a set of submenus
-     * Override with an empty implementation if you don't want a configuration page
-     * @return void
-     */
-    public function addSettingsSubMenuPage()
-    {
-        //$this->addSettingsSubMenuPageToPluginsMenu();
-        $this->addSettingsSubMenuPageToSettingsMenu();
-    }
-
-    protected function requireExtraPluginFiles()
-    {
+    protected function requireExtraPluginFiles(): void {
         require_once ABSPATH . 'wp-includes/pluggable.php';
         require_once ABSPATH . 'wp-admin/includes/plugin.php';
-    }
-
-    /**
-     * @return string Slug name for the URL to the Setting page
-     * (i.e. the page for setting options)
-     */
-    protected function getSettingsSlug()
-    {
-        return get_class($this) . 'Settings';
-    }
-
-    protected function addSettingsSubMenuPageToPluginsMenu()
-    {
-        $this->requireExtraPluginFiles();
-        $displayName = $this->getPluginDisplayName();
-        add_submenu_page('plugins.php',
-            $displayName,
-            $displayName,
-            'manage_options',
-            $this->getSettingsSlug(),
-            array(&$this, 'settingsPage'));
-    }
-
-    protected function addSettingsSubMenuPageToSettingsMenu()
-    {
-        $this->requireExtraPluginFiles();
-        $displayName = $this->getPluginDisplayName();
-        add_options_page($displayName,
-            $displayName,
-            'manage_options',
-            $this->getSettingsSlug(),
-            array(&$this, 'settingsPage'));
     }
 
     /**
@@ -166,8 +102,7 @@ class SlickEngagement_LifeCycle extends SlickEngagement_InstallIndicator
      * The plugin prefix is lower-cases as a best practice that all DB table names are lower case to
      * avoid issues on some platforms
      */
-    protected function prefixTableName($name)
-    {
+    protected function prefixTableName($name): string {
         global $wpdb;
         return $wpdb->prefix . strtolower($this->prefix($name));
     }
@@ -188,19 +123,16 @@ class SlickEngagement_LifeCycle extends SlickEngagement_InstallIndicator
      *
      * @return string URL that can be used in a web page to make an Ajax call to $this->functionName
      */
-    public function getAjaxUrl($actionName)
-    {
+    public function getAjaxUrl($actionName): string {
         return admin_url('admin-ajax.php') . '?action=' . $actionName;
     }
 
-    public function guildLog($msg, $name = '')
-    {
+    public function slickLog($msg, $name = ''): void {
         // Print the name of the calling function if $name is left empty
         $trace = debug_backtrace();
-        $name = ('' == $name) ? $trace[1]['function'] : $name;
+        $name = ('' === $name) ? $trace[1]['function'] : $name;
         $msg = print_r($msg, true);
-        $log = "Slick: " . $name . "  |  " . $msg . "\n";
+        $log = "Slickstream: $name | $msg\n";
         error_log($log);
     }
-
 }
