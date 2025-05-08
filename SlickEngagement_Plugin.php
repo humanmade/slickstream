@@ -298,6 +298,11 @@ class SlickEngagement_Plugin extends OptionsManager  {
 
     //Outputs debug info, meta tags, page boot data, and other page metadata into the page header
     public function addSlickPageHeader(): void {
+        // @TODO: Confirm that this doesn't cause issues with Slickstream itself.
+        if (is_404()) {
+            return;
+        }
+
         global $post;
 
         $this->echoPageGenerationTimestamp();
