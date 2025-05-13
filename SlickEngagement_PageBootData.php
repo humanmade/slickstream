@@ -24,7 +24,7 @@ class PageBootData extends OptionsManager {
         $this->siteCode = addslashes(substr($siteCode, 0, 9));
         $this->utils = Utils::getInstance();
         $this->urlPath = $this->getCurrentUrlPath();
-        $this->pageGroupIdTransientName = 'slick_page_group_id_' . md5($_SERVER['SERVER_NAME'] . $this->urlPath);
+        $this->pageGroupIdTransientName = 'slick_page_group_id_' . md5($this->urlPath);
         $this->pageGroupId = $this->getPageGroupId();
         $this->pageGroupTransientName = $this->getPageGroupTransientName();
         $this->pageBootData = $this->getPageBootData();
@@ -114,16 +114,21 @@ class PageBootData extends OptionsManager {
             return null;
         }
 
-        $protocol = ($_SERVER['HTTPS'] === 'on') ? 'https' : 'http'; 
-        $pageUrl = $protocol . '://' .$_SERVER['SERVER_NAME'] . $this->urlPath;
-        $pageBootDataUrl = $this->serverUrlBase . '/d/page-boot-data?site=' . rawurlencode($this->siteCode) . '&url=' . rawurlencode($pageUrl);
+        $page_url = get_the_permalink();
+        if (!$page_url) {
+            return null;
+        }
+
+        var_dump($page_url); exit;
+
+        $pageBootDataUrl = $this->serverUrlBase . '/d/page-boot-data?site=' . rawurlencode($this->siteCode) . '&url=' . rawurlencode($page_url);
         return $this->utils->fetchRemoteObject($pageBootDataUrl);
     }
     
     public function handlePageBootData(): void {
         if (wp_get_environment_type() === 'local' && !$this->utils->isDebugModeEnabled()) {
             $this->echoComment('Local Environment Detected; Skipping Page Boot Data');
-            return;
+           // return;
         }
 
         // If `delete-boot=1` is passed as a query param, delete the stored page boot data
@@ -135,6 +140,7 @@ class PageBootData extends OptionsManager {
         $forceFetchBootData = ($slickBootParam === '1');
         $dontLoadBootData = ($slickBootParam === '0');
 
+
         if ($forceFetchBootData) {
             $this->pageBootData = $this->fetchPageBootData();
         } else if ($dontLoadBootData) {
@@ -142,16 +148,18 @@ class PageBootData extends OptionsManager {
             return;
         }
     
-        if ($this->pageBootData) {
-            $this->echoSlickBootJs();
-            $this->echoClsData();
-        } else {
+        if (!$this->pageBootData) {
             $this->echoComment('No Page Boot Data Available; Front-end will Fetch it Instead');
+            return;
         }
+
+        $this->echoSlickBootJs();
+        $this->echoClsData();
     }
 
     private function getCurrentUrlPath(): string {
-        $parsedUrl = parse_url('http://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI']);
+        $current_url = get_the_permalink();
+        $parsedUrl = wp_parse_url($current_url);
         $path = '';
 
         if (isset($parsedUrl['path'])) {
